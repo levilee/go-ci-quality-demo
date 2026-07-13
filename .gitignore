@@ -1,0 +1,6 @@
+/bin/
+/server
+/coverage.out
+*.exe
+.idea/
+.vscode/
