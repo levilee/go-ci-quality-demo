@@ -47,6 +47,7 @@ spec:
     stage('Test') {
       steps {
         sh 'go test -race -coverprofile=coverage.out ./...'
+        archiveArtifacts artifacts: 'coverage.out'
       }
     }
 
@@ -57,9 +58,4 @@ spec:
     }
   }
 
-  post {
-    always {
-      archiveArtifacts artifacts: 'coverage.out', allowEmptyArchive: true
-    }
-  }
 }
