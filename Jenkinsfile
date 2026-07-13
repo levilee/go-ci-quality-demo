@@ -1,8 +1,32 @@
 pipeline {
-  agent any
+  agent {
+    kubernetes {
+      defaultContainer 'golang'
+      yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: golang
+      image: golang:1.24-bookworm
+      command:
+        - sleep
+      args:
+        - 99d
+      tty: true
+      resources:
+        requests:
+          cpu: 200m
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+'''
+    }
+  }
 
   options {
-    timestamps()
+    timeout(time: 10, unit: 'MINUTES')
     disableConcurrentBuilds()
     buildDiscarder(logRotator(numToKeepStr: '20'))
   }
