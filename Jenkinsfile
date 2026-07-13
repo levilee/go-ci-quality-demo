@@ -52,7 +52,7 @@ spec:
 
     stage('Build') {
       steps {
-        sh 'CGO_ENABLED=0 go build -o bin/server ./cmd/server'
+        sh 'CGO_ENABLED=0 go build -buildvcs=false -o bin/server ./cmd/server'
       }
     }
   }
