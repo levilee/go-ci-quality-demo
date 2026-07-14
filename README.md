@@ -30,4 +30,10 @@ Configuration:
 | `PORT` | `8080` |
 | `UPSTREAM_URL` | `https://api.github.com/zen` |
 
-The repository includes a minimal GitHub Actions workflow, Jenkins pipeline, Dockerfile, and unit tests with a mocked upstream server.
+The repository includes parallel Jenkins and GitHub Actions quality-gate POCs, a Dockerfile, and unit tests with a mocked upstream server.
+
+## CI quality gates
+
+- `Jenkinsfile` validates formatting, static analysis, tests with race detection and coverage, and compilation in Jenkins.
+- `.github/workflows/ci.yml` runs the equivalent GitHub-native gate as parallel jobs and exposes a stable `Quality Gate` check for branch protection.
+- Neither POC deploys the application. Deployment should begin only after the PR gate passes and the change is merged into a protected branch.

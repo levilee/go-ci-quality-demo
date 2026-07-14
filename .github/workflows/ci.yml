@@ -1,34 +1,131 @@
-name: CI
+name: GitHub Native Quality Gate
 
 on:
   pull_request:
+    branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  quality:
+  go-quality:
+    name: Go quality and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version-file: go.mod
+          go-version: 1.25.x
           cache: true
 
       - name: Verify formatting
-        run: test -z "$(gofmt -l .)"
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "The following files need gofmt:"
+            echo "$files"
+            exit 1
+          fi
 
-      - name: Vet
+      - name: Static analysis
         run: go vet ./...
 
-      - name: Test
-        run: go test -race -coverprofile=coverage.out ./...
+      - name: Unit tests, race detector, and coverage
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Enforce coverage threshold
+        shell: bash
+        run: |
+          coverage="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%", "", $3); print $3}')"
+          echo "Total coverage: ${coverage}% (required: 70%)"
+          awk -v coverage="$coverage" 'BEGIN { exit !(coverage >= 70) }'
 
       - name: Build
-        run: go build ./cmd/server
+        run: go build -buildvcs=false -o bin/server ./cmd/server
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: go-coverage
+          path: coverage.out
+          if-no-files-found: warn
+          retention-days: 7
+
+  govulncheck:
+    name: Go vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.25.x
+          cache: true
+
+      - name: Install pinned govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+
+      - name: Scan reachable Go vulnerabilities
+        run: govulncheck ./...
+
+  trivy:
+    name: Repository security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Scan vulnerabilities, secrets, and misconfiguration
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          output: trivy-report.txt
+          exit-code: 1
+
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+  quality-gate:
+    name: Quality Gate
+    if: always()
+    needs: [go-quality, govulncheck, trivy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce required checks
+        shell: bash
+        run: |
+          echo "go-quality=${{ needs.go-quality.result }}"
+          echo "govulncheck=${{ needs.govulncheck.result }}"
+          echo "trivy=${{ needs.trivy.result }}"
+
+          test "${{ needs.go-quality.result }}" = "success"
+          test "${{ needs.govulncheck.result }}" = "success"
+          test "${{ needs.trivy.result }}" = "success"
