@@ -43,6 +43,59 @@ func TestGreet(t *testing.T) {
 	}
 }
 
+func TestCalculate(t *testing.T) {
+	tests := []struct {
+		name      string
+		url       string
+		wantCode  int
+		wantValue int64
+		wantError string
+	}{
+		{name: "add", url: "/api/calculate?a=7&b=5&operation=add", wantCode: http.StatusOK, wantValue: 12},
+		{name: "subtract", url: "/api/calculate?a=7&b=5&operation=subtract", wantCode: http.StatusOK, wantValue: 2},
+		{name: "multiply", url: "/api/calculate?a=-3&b=5&operation=multiply", wantCode: http.StatusOK, wantValue: -15},
+		{name: "missing a", url: "/api/calculate?b=5&operation=add", wantCode: http.StatusBadRequest, wantError: "a is required"},
+		{name: "invalid b", url: "/api/calculate?a=7&b=text&operation=add", wantCode: http.StatusBadRequest, wantError: "b must be a valid integer"},
+		{name: "invalid operation", url: "/api/calculate?a=7&b=5&operation=divide", wantCode: http.StatusBadRequest, wantError: "operation must be one of: add, subtract, multiply"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, test.url, nil)
+			NewHandler("http://unused", http.DefaultClient).ServeHTTP(recorder, request)
+
+			if recorder.Code != test.wantCode {
+				t.Fatalf("status = %d, want %d", recorder.Code, test.wantCode)
+			}
+
+			var response struct {
+				Result int64  `json:"result"`
+				Error  string `json:"error"`
+			}
+			if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if response.Result != test.wantValue {
+				t.Fatalf("result = %d, want %d", response.Result, test.wantValue)
+			}
+			if response.Error != test.wantError {
+				t.Fatalf("error = %q, want %q", response.Error, test.wantError)
+			}
+		})
+	}
+}
+
+func TestCalculateRejectsPost(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/calculate?a=1&b=2&operation=add", nil)
+	NewHandler("http://unused", http.DefaultClient).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
+	}
+}
+
 func TestCallUpstream(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)

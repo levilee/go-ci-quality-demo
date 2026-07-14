@@ -8,7 +8,7 @@ kind: Pod
 spec:
   containers:
     - name: golang
-      image: golang:1.24-bookworm
+      image: golang:1.25.12-bookworm
       command:
         - sleep
       args:
