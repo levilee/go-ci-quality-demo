@@ -1,16 +1,16 @@
 # GitHub Native Quality Gate POC
 
-This branch adds a GitHub Actions implementation that can be compared with the existing Jenkins pipeline against the same Go source code.
+This branch adds a GitHub Actions implementation that can be compared with the existing Jenkins pipeline. It is a Go POC today, while the quality workflow is already prepared to discover independent Go, Node.js, and Java services in a monorepo.
 
 ## Pull request execution
 
-Every pull request targeting `main` starts three independent checks:
+Every pull request targeting `main` discovers affected services from `go.mod`, `package.json`, `pom.xml`, `build.gradle`, or `build.gradle.kts`. A service change runs only that service's language checks; shared CI/library/unknown-path changes run all discovered services. The POC currently starts these independent checks:
 
 1. **Go quality and tests**: formatting, `go vet`, unit tests, race detection, a 70% coverage threshold, and compilation.
 2. **Go vulnerability scan**: reachable-vulnerability analysis with pinned `govulncheck` v1.6.0. The scanner, runner, container build, and Jenkins agent use the patched Go 1.25.12 toolchain while preserving the project's Go 1.21 language compatibility.
 3. **Repository security scan**: Trivy filesystem scanning for vulnerable dependencies, secrets, and configuration errors. High and critical findings block the run.
 
-The final **Quality Gate** job succeeds only when all three checks succeed. Configure that single, stable check as required in a GitHub ruleset after the POC is validated.
+The final **Quality Gate** job succeeds only when every applicable service check and security check succeeds. Configure that single, stable check as required in a GitHub ruleset after the POC is validated.
 
 ## Evidence
 
@@ -27,7 +27,7 @@ This POC validates continuous integration only. Image building, signing, test-en
 
 A failed check must not be changed to success manually. An exception is a controlled bypass of the merge rule, not a modification or rerun that hides the original result.
 
-1. The author opens an `Exception Request` issue and links the blocked PR, failed run, finding ID, evidence, risk, scope, expiry time, rollback plan, and follow-up owner.
+1. The author opens the repository's `Quality gate exception` issue form and links the blocked PR, failed run, finding ID, evidence, risk, scope, expiry time, rollback plan, compensating controls, and follow-up owner.
 2. A security or release owner who did not author the PR reviews the request. The code owner still reviews the code change.
 3. Only a small GitHub ruleset bypass team may merge. Use the `For pull requests only` bypass mode when it is available; never grant bypass to all administrators or developers.
 4. The approver records `APPROVED`, the exception issue number, expiry, and reason in the PR before bypassing. Emergency production approval is separate from CI-risk acceptance.

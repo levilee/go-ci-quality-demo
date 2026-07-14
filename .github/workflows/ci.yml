@@ -15,59 +15,89 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go-quality:
-    name: Go quality and tests
+  detect-services:
+    name: Detect affected services
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    outputs:
+      services: ${{ steps.discover.outputs.services }}
+      go-services: ${{ steps.discover.outputs.go-services }}
+      has-services: ${{ steps.discover.outputs.has-services }}
+      has-go-services: ${{ steps.discover.outputs.has-go-services }}
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+
+      - name: Discover changed services and languages
+        id: discover
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/ci/discover-services.sh "$BASE_SHA" "$HEAD_SHA"
+
+  service-quality:
+    name: ${{ matrix.service.name }} (${{ matrix.service.language }})
+    needs: detect-services
+    if: needs.detect-services.outputs.has-services == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-services.outputs.services) }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Set up Go
+        if: matrix.service.language == 'go'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
+          # Security baseline: patched runtime used by the POC, while the
+          # module's `go` directive continues to define language compatibility.
           go-version: 1.25.12
           cache: true
+          cache-dependency-path: ${{ matrix.service.path }}/go.sum
 
-      - name: Verify formatting
-        shell: bash
-        run: |
-          files="$(gofmt -l .)"
-          if [ -n "$files" ]; then
-            echo "The following files need gofmt:"
-            echo "$files"
-            exit 1
-          fi
+      - name: Set up Node.js
+        if: matrix.service.language == 'node'
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          # Package-manager caching is intentionally configured inside each
+          # service after its lockfile type (npm/pnpm/yarn) is known.
+          package-manager-cache: false
 
-      - name: Static analysis
-        run: go vet ./...
+      - name: Set up Java
+        if: matrix.service.language == 'java'
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: '21'
 
-      - name: Unit tests, race detector, and coverage
-        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Run language quality, tests, coverage, and build
+        env:
+          SERVICE_COVERAGE_THRESHOLD: '70'
+        run: bash scripts/ci/run-service-checks.sh "${{ matrix.service.path }}" "${{ matrix.service.language }}"
 
-      - name: Enforce coverage threshold
-        shell: bash
-        run: |
-          coverage="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%", "", $3); print $3}')"
-          echo "Total coverage: ${coverage}% (required: 70%)"
-          awk -v coverage="$coverage" 'BEGIN { exit !(coverage >= 70) }'
-
-      - name: Build
-        run: go build -buildvcs=false -o bin/server ./cmd/server
-
-      - name: Upload coverage
-        if: always()
+      - name: Upload Go coverage
+        if: always() && matrix.service.language == 'go'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: go-coverage
-          path: coverage.out
+          name: coverage-${{ matrix.service.name }}
+          path: ${{ matrix.service.path }}/coverage.out
           if-no-files-found: warn
           retention-days: 7
 
   govulncheck:
     name: Go vulnerability scan
+    needs: detect-services
+    if: needs.detect-services.outputs.has-go-services == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-services.outputs.go-services) }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -75,13 +105,16 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
+          # govulncheck must run with the patched scanner/runtime baseline.
           go-version: 1.25.12
           cache: true
+          cache-dependency-path: ${{ matrix.service.path }}/go.sum
 
       - name: Install pinned govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
 
       - name: Scan reachable Go vulnerabilities
+        working-directory: ${{ matrix.service.path }}
         run: govulncheck ./...
 
   trivy:
@@ -113,19 +146,52 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Block newly introduced high or critical dependency vulnerabilities
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [go-quality, govulncheck, trivy]
+    needs: [detect-services, service-quality, govulncheck, trivy, dependency-review]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce required checks
         shell: bash
         run: |
-          echo "go-quality=${{ needs.go-quality.result }}"
+          echo "service-quality=${{ needs.service-quality.result }}"
           echo "govulncheck=${{ needs.govulncheck.result }}"
           echo "trivy=${{ needs.trivy.result }}"
+          echo "dependency-review=${{ needs.dependency-review.result }}"
 
-          test "${{ needs.go-quality.result }}" = "success"
-          test "${{ needs.govulncheck.result }}" = "success"
+          test "${{ needs.detect-services.result }}" = "success"
+
+          if [ "${{ needs.detect-services.outputs.has-services }}" = "true" ]; then
+            test "${{ needs.service-quality.result }}" = "success"
+          else
+            test "${{ needs.service-quality.result }}" = "skipped"
+          fi
+
+          if [ "${{ needs.detect-services.outputs.has-go-services }}" = "true" ]; then
+            test "${{ needs.govulncheck.result }}" = "success"
+          else
+            test "${{ needs.govulncheck.result }}" = "skipped"
+          fi
+
           test "${{ needs.trivy.result }}" = "success"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            test "${{ needs.dependency-review.result }}" = "success"
+          else
+            test "${{ needs.dependency-review.result }}" = "skipped"
+          fi

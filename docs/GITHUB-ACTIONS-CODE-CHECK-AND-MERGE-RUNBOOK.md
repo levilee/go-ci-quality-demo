@@ -209,7 +209,7 @@ git push
 
 扫描器安装或编译失败表示检查没有执行，不能通过 `continue-on-error: true` 忽略。例如旧版 `govulncheck v1.1.3` 依赖的 `x/tools v0.23.0` 无法使用 Go 1.25 编译，应升级并锁定为兼容组合 `Go 1.25.12 + govulncheck v1.6.0`。`1.25.x` 可能因 Runner 工具缓存短暂选择到已有漏洞的旧补丁，因此安全基线使用明确补丁版本，并由依赖升级 PR 定期更新。只有扫描器成功执行后报告的发现，才属于需要修复或申请例外的安全结果。
 
-确认误判时执行可审计例外流程：保留失败运行，创建 Exception Request Issue，由非作者审批，并由 Ruleset bypass 专用角色合并。不得修改检查状态。完整规则见 `docs/GITHUB-NATIVE-QUALITY-GATE-PLAN.md`。
+确认误判时执行可审计例外流程：保留失败运行，创建 `Quality gate exception` Issue，由非作者的安全负责人和发布负责人审批，并由 Ruleset bypass 专用角色合并。不得修改检查状态。完整字段与到期要求见 `.github/ISSUE_TEMPLATE/quality-gate-exception.yml` 和 `docs/GITHUB-NATIVE-SECURITY-GATE-RUNBOOK.md`。
 
 ## 9. 合并 main
 
