@@ -23,6 +23,21 @@ The final **Quality Gate** job succeeds only when all three checks succeed. Conf
 
 This POC validates continuous integration only. Image building, signing, test-environment deployment, smoke tests, approval, production deployment, health checks, and rollback belong to the continuous-delivery workflow after merge.
 
+## Auditable exception gate
+
+A failed check must not be changed to success manually. An exception is a controlled bypass of the merge rule, not a modification or rerun that hides the original result.
+
+1. The author opens an `Exception Request` issue and links the blocked PR, failed run, finding ID, evidence, risk, scope, expiry time, rollback plan, and follow-up owner.
+2. A security or release owner who did not author the PR reviews the request. The code owner still reviews the code change.
+3. Only a small GitHub ruleset bypass team may merge. Use the `For pull requests only` bypass mode when it is available; never grant bypass to all administrators or developers.
+4. The approver records `APPROVED`, the exception issue number, expiry, and reason in the PR before bypassing. Emergency production approval is separate from CI-risk acceptance.
+5. The original failed Action run, PR discussion, reviews, ruleset bypass event, merge commit, and exception issue remain as audit evidence.
+6. Exceptions expire in at most 7 days for critical/high security findings and 30 days for other findings. The follow-up issue must remove the exception or fix the cause.
+
+Minimum separation of duties is requester, technical reviewer, and bypass approver. For this personal private-repository POC, a single owner cannot provide real separation of duties; validate the mechanics here, then use an organization team for production.
+
+See `docs/GITHUB-NATIVE-QUALITY-GATE-PLAN.md` for the complete GitHub-native design and test matrix.
+
 ## Comparison procedure
 
 1. Open a pull request from this branch to `main` and record the GitHub Actions duration and results.
