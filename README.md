@@ -6,6 +6,7 @@ A small Go HTTP service used to validate Jenkins and GitHub quality gates.
 
 - `GET /healthz` returns service health.
 - `GET /api/greet?name=Codex` returns a greeting.
+- `GET /api/calculate?a=7&b=5&operation=add` calculates `add`, `subtract`, or `multiply` for two integers.
 - `GET /api/upstream` calls the URL configured by `UPSTREAM_URL` and returns its status and body.
 
 ## Run locally
@@ -20,6 +21,7 @@ Then call:
 ```bash
 curl http://localhost:8080/healthz
 curl "http://localhost:8080/api/greet?name=Codex"
+curl "http://localhost:8080/api/calculate?a=7&b=5&operation=add"
 curl http://localhost:8080/api/upstream
 ```
 

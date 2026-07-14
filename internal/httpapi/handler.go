@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 type API struct {
@@ -17,6 +18,7 @@ func NewHandler(upstreamURL string, client *http.Client) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", getOnly(api.health))
 	mux.HandleFunc("/api/greet", getOnly(api.greet))
+	mux.HandleFunc("/api/calculate", getOnly(api.calculate))
 	mux.HandleFunc("/api/upstream", getOnly(api.callUpstream))
 	return mux
 }
@@ -41,6 +43,54 @@ func (a *API) greet(w http.ResponseWriter, r *http.Request) {
 		name = "world"
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "hello, " + name})
+}
+
+func (a *API) calculate(w http.ResponseWriter, r *http.Request) {
+	left, err := requiredInteger(r, "a")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	right, err := requiredInteger(r, "b")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	operation := r.URL.Query().Get("operation")
+	var result int64
+	switch operation {
+	case "add":
+		result = left + right
+	case "subtract":
+		result = left - right
+	case "multiply":
+		result = left * right
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "operation must be one of: add, subtract, multiply",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"a":         left,
+		"b":         right,
+		"operation": operation,
+		"result":    result,
+	})
+}
+
+func requiredInteger(r *http.Request, name string) (int64, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return 0, fmt.Errorf("%s is required", name)
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid integer", name)
+	}
+	return parsed, nil
 }
 
 func (a *API) callUpstream(w http.ResponseWriter, r *http.Request) {
