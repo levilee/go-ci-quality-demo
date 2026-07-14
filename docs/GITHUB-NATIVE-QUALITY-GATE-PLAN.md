@@ -1,6 +1,6 @@
 # GitHub 原生 CI/CD 质量门禁实施与验证方案
 
-版本：1.0  
+版本：1.1
 适用对象：Go、Java、Node.js 及多语言仓库  
 POC 仓库：`levilee/go-ci-quality-demo`  
 当前范围：PR 质量门禁；部署流水线作为下一阶段
@@ -55,13 +55,21 @@ GitHub Pull Request
 | Repository Ruleset | PR、Required Check、禁止直推 | 尚未启用 | POC 通过后启用 |
 | CODEOWNERS | 关键目录指定审核人 | 未实现 | 必须 |
 | PR 模板 | 变更、测试、风险、回滚清单 | 未实现 | 必须 |
-| Issue 模板 | 例外申请及到期治理 | 未实现 | 必须 |
+| Issue 模板 | 例外申请及到期治理 | 已实现：`quality-gate-exception.yml` | 必须 |
 | Environments | 测试/生产部署记录与 Secrets 隔离 | 未实现 | 部署阶段启用 |
 | Artifact/Container Registry | 保存覆盖率、扫描报告、镜像 | 报告已实现 | 镜像使用 digest 晋级 |
-| Dependabot | Action 与依赖升级 PR | 未实现 | 建议启用 |
+| Dependabot | Action 与依赖升级 PR | 已实现：Go Modules / GitHub Actions | 建议启用 |
 
 当前 POC 工作流：`.github/workflows/ci.yml`。
 
+### 3.1 多服务变更识别约定
+
+工作流不维护静态服务清单，而是从以下文件识别服务：`go.mod`（Go）、`package.json`（Node.js/TypeScript）、`pom.xml` / `build.gradle` / `build.gradle.kts`（Java/Kotlin）。独立部署的服务统一放在 `services/<service-name>/`。
+
+- 只改动 `services/<service-name>/` 时，只为该服务生成质量矩阵任务；Go 服务额外运行 `govulncheck`。
+- 改动 `.github/workflows/`、`scripts/ci/`、`ci/`、`libs/`、`shared/`、`go.work` 或无法归属到某个服务的路径时，安全回退为全部服务检查。
+- Go：格式、`vet`、`-race`、覆盖率和构建；Node.js：锁文件安装、`lint`、带覆盖率的 `test`、`build`；Java：Maven `verify` 或 Gradle `check build`。
+- Node 服务必须提供锁文件以及 `lint`、`test`、`build` scripts；Java 覆盖率阈值必须由服务自己的 JaCoCo 配置纳入 Maven `verify` 或 Gradle `check`。
 ## 4. PR 标准流程
 
 1. 开发者从最新 `main` 创建短生命周期分支。

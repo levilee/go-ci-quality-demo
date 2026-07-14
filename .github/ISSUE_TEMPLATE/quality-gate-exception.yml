@@ -1,0 +1,78 @@
+name: Quality gate exception
+description: Request a time-bound, auditable exception for a failed PR quality or security gate.
+title: "[Quality gate exception]: "
+labels: ["quality-gate-exception", "security-review-required"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form does not make a failed check pass. A ruleset bypass is permitted only after the required approvals and compensating controls are recorded here.
+  - type: input
+    id: pull_request
+    attributes:
+      label: Pull request URL
+      placeholder: https://github.com/OWNER/REPOSITORY/pull/123
+    validations:
+      required: true
+  - type: input
+    id: commit_sha
+    attributes:
+      label: Tested commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: failed_gate
+    attributes:
+      label: Failed gate
+      options:
+        - Quality Gate - service quality, test, coverage, or build
+        - Quality Gate - govulncheck
+        - Quality Gate - Trivy
+        - Quality Gate - Dependency review
+        - CodeQL code scanning result
+        - Secret scanning or Push Protection
+    validations:
+      required: true
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding and evidence
+      description: Include the failed check URL, rule/advisory ID, affected file or dependency, and severity. Do not paste a secret.
+    validations:
+      required: true
+  - type: textarea
+    id: business_reason
+    attributes:
+      label: Business reason and impact of not releasing
+    validations:
+      required: true
+  - type: textarea
+    id: compensating_controls
+    attributes:
+      label: Compensating controls
+      description: State concrete controls, such as a feature flag disabled by default, network restriction, WAF rule, monitoring alert, or rollback plan.
+    validations:
+      required: true
+  - type: input
+    id: expiry
+    attributes:
+      label: Expiry date and time (UTC+8)
+      placeholder: 2026-07-22 18:00
+    validations:
+      required: true
+  - type: input
+    id: remediation_issue
+    attributes:
+      label: Remediation issue or PR URL
+      description: A permanent fix must be tracked before an exception can be approved.
+    validations:
+      required: true
+  - type: checkboxes
+    id: acknowledgement
+    attributes:
+      label: Requester acknowledgement
+      options:
+        - label: I confirm this request contains no credential or sensitive production data.
+          required: true
+        - label: I understand the failed check remains failed and the exception expires automatically at the stated time.
+          required: true
