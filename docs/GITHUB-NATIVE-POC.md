@@ -7,7 +7,7 @@ This branch adds a GitHub Actions implementation that can be compared with the e
 Every pull request targeting `main` starts three independent checks:
 
 1. **Go quality and tests**: formatting, `go vet`, unit tests, race detection, a 70% coverage threshold, and compilation.
-2. **Go vulnerability scan**: reachable-vulnerability analysis with pinned `govulncheck` v1.6.0. The scanner and runner both target Go 1.25 while preserving the project's Go 1.21 language compatibility.
+2. **Go vulnerability scan**: reachable-vulnerability analysis with pinned `govulncheck` v1.6.0. The scanner, runner, container build, and Jenkins agent use the patched Go 1.25.12 toolchain while preserving the project's Go 1.21 language compatibility.
 3. **Repository security scan**: Trivy filesystem scanning for vulnerable dependencies, secrets, and configuration errors. High and critical findings block the run.
 
 The final **Quality Gate** job succeeds only when all three checks succeed. Configure that single, stable check as required in a GitHub ruleset after the POC is validated.

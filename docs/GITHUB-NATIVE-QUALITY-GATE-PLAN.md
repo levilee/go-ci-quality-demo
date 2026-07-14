@@ -89,7 +89,7 @@ GitHub Pull Request
 ### 5.2 Go vulnerability scan
 
 - 使用固定版本 `govulncheck@v1.6.0` 分析可达漏洞；该版本要求 Go 1.25，并使用兼容 Go 1.25 的 `x/tools`。
-- Runner 使用 Go `1.25.x` 的最新补丁，项目仍保持 Go 1.21 语言兼容。
+- Runner、Docker 构建和 Jenkins Agent 使用已修复 GO-2026-5856 的 Go `1.25.12`，项目仍保持 Go 1.21 语言兼容。避免使用可能因 Runner 缓存选择旧补丁的 `1.25.x`；通过受控升级 PR 更新明确的安全补丁版本。
 - POC 已在本机 Go 1.21.9 上实际发现 29 个可达标准库漏洞，证明扫描能够阻断过期运行时风险。
 
 ### 5.3 Repository security scan
