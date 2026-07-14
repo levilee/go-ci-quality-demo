@@ -70,7 +70,6 @@ GitHub Pull Request
 - 改动 `.github/workflows/`、`scripts/ci/`、`ci/`、`libs/`、`shared/`、`go.work` 或无法归属到某个服务的路径时，安全回退为全部服务检查。
 - Go：格式、`vet`、`-race`、覆盖率和构建；Node.js：锁文件安装、`lint`、带覆盖率的 `test`、`build`；Java：Maven `verify` 或 Gradle `check build`。
 - Node 服务必须提供锁文件以及 `lint`、`test`、`build` scripts；Java 覆盖率阈值必须由服务自己的 JaCoCo 配置纳入 Maven `verify` 或 Gradle `check`。
-
 ## 4. PR 标准流程
 
 1. 开发者从最新 `main` 创建短生命周期分支。
