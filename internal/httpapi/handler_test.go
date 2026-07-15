@@ -96,6 +96,24 @@ func TestCalculateRejectsPost(t *testing.T) {
 	}
 }
 
+func TestPOCQualityGateBlocksInvalidExpectation(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/calculate?a=7&b=5&operation=add", nil)
+	NewHandler("http://unused", http.DefaultClient).ServeHTTP(recorder, request)
+
+	var response struct {
+		Result int64 `json:"result"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	const deliberatelyWrongExpectedResult int64 = 999
+	if response.Result != deliberatelyWrongExpectedResult {
+		t.Fatalf("POC intentional failure: result = %d, want %d", response.Result, deliberatelyWrongExpectedResult)
+	}
+}
+
 func TestCallUpstream(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
