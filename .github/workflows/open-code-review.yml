@@ -1,0 +1,196 @@
+name: Open Code Review
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull Request number to review
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: >-
+    ${{
+      (
+        github.event_name == 'workflow_dispatch'
+        || (
+          github.event_name == 'issue_comment'
+          && github.event.issue.pull_request
+          && github.event.comment.user.type != 'Bot'
+          && (
+            github.event.comment.author_association == 'MEMBER'
+            || github.event.comment.author_association == 'OWNER'
+            || github.event.comment.author_association == 'COLLABORATOR'
+          )
+          && startsWith(github.event.comment.body, '/open-code-review')
+        )
+      )
+      && format('open-code-review-pr-{0}', github.event.inputs.pr_number || github.event.issue.number)
+      || format('open-code-review-noop-{0}', github.run_id)
+    }}
+  cancel-in-progress: true
+
+jobs:
+  comment-review:
+    if: |
+      github.event_name == 'issue_comment'
+      && github.event.issue.pull_request
+      && github.event.comment.user.type != 'Bot'
+      && (
+        github.event.comment.author_association == 'MEMBER'
+        || github.event.comment.author_association == 'OWNER'
+        || github.event.comment.author_association == 'COLLABORATOR'
+      )
+      && startsWith(github.event.comment.body, '/open-code-review')
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Run Open Code Review from PR comment
+        uses: alibaba/open-code-review@1b193db3587e4d3f429bd8c8213479d63e3b4f21
+        with:
+          github_token: ${{ github.token }}
+          llm_url: ${{ secrets.OCR_LLM_URL }}
+          llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          llm_model: ${{ vars.OCR_LLM_MODEL }}
+          llm_use_anthropic: ${{ vars.OCR_LLM_USE_ANTHROPIC }}
+          language: Chinese
+          ocr_version: 1.7.16
+          review_concurrency: '4'
+          sticky_summary: 'true'
+          incremental: 'true'
+          upload_artifacts: 'true'
+
+  manual-review:
+    if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve Pull Request
+        id: pr-context
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+        with:
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            if (!Number.isInteger(prNumber) || prNumber < 1) {
+              core.setFailed('pr_number must be a positive integer');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            if (pr.state !== 'open') {
+              core.setFailed(`Pull Request #${prNumber} is not open`);
+              return;
+            }
+            core.setOutput('number', String(pr.number));
+            core.setOutput('base_ref', pr.base.ref);
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('title', pr.title);
+
+      - name: Checkout trusted base branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ steps.pr-context.outputs.base_ref }}
+          fetch-depth: 0
+
+      - name: Fetch Pull Request head object without checking it out
+        env:
+          PR_NUMBER: ${{ steps.pr-context.outputs.number }}
+          HEAD_SHA: ${{ steps.pr-context.outputs.head_sha }}
+        run: |
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*) echo 'Invalid PR number'; exit 1 ;;
+          esac
+          git fetch --no-tags origin "pull/${PR_NUMBER}/head"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24'
+
+      - name: Install pinned Open Code Review CLI
+        run: npm install --global '@alibaba-group/open-code-review@1.7.16'
+
+      - name: Run OCR against the latest Pull Request head
+        id: ocr
+        env:
+          BASE_REF: ${{ steps.pr-context.outputs.base_ref }}
+          HEAD_SHA: ${{ steps.pr-context.outputs.head_sha }}
+          PR_TITLE: ${{ steps.pr-context.outputs.title }}
+          OCR_LLM_URL: ${{ secrets.OCR_LLM_URL }}
+          OCR_LLM_TOKEN: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          OCR_LLM_MODEL: ${{ vars.OCR_LLM_MODEL }}
+          OCR_USE_ANTHROPIC: ${{ vars.OCR_LLM_USE_ANTHROPIC }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          MERGE_BASE="$(git merge-base "origin/${BASE_REF}" "${HEAD_SHA}")"
+          echo "Reviewing ${HEAD_SHA} from ${MERGE_BASE} against origin/${BASE_REF}"
+          RESULT_PATH="${RUNNER_TEMP}/ocr-result.json"
+          STDERR_PATH="${RUNNER_TEMP}/ocr-stderr.log"
+          set +e
+          ocr review \
+            --from "${MERGE_BASE}" \
+            --to "${HEAD_SHA}" \
+            --format json \
+            --audience agent \
+            --background "${PR_TITLE}" \
+            >"${RESULT_PATH}" 2>"${STDERR_PATH}"
+          OCR_EXIT_CODE=$?
+          set -e
+          echo "exit_code=${OCR_EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          echo "result_path=${RESULT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "stderr_path=${STDERR_PATH}" >> "$GITHUB_OUTPUT"
+          cat "${STDERR_PATH}"
+
+      - name: Upload OCR artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: open-code-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ steps.ocr.outputs.result_path }}
+            ${{ steps.ocr.outputs.stderr_path }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish OCR results to Pull Request
+        if: always()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        env:
+          PR_NUMBER: ${{ steps.pr-context.outputs.number }}
+          HEAD_SHA: ${{ steps.pr-context.outputs.head_sha }}
+          OCR_EXIT_CODE: ${{ steps.ocr.outputs.exit_code }}
+          OCR_RESULT_PATH: ${{ steps.ocr.outputs.result_path }}
+          OCR_STDERR_PATH: ${{ steps.ocr.outputs.stderr_path }}
+        with:
+          script: |
+            const { postOpenCodeReview } = require('./scripts/ci/post-open-code-review.js');
+            await postOpenCodeReview({
+              github,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pullNumber: Number(process.env.PR_NUMBER),
+              headSha: process.env.HEAD_SHA,
+              resultPath: process.env.OCR_RESULT_PATH,
+              stderrPath: process.env.OCR_STDERR_PATH,
+              ocrExitCode: Number(process.env.OCR_EXIT_CODE),
+            });
+
+      - name: Surface OCR failure without blocking merge
+        if: steps.ocr.outputs.exit_code != '0'
+        run: |
+          echo "Open Code Review failed with exit code ${{ steps.ocr.outputs.exit_code }}"
+          exit 1
