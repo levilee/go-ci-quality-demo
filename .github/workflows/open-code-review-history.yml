@@ -55,6 +55,16 @@ jobs:
           ref: ${{ steps.pr-context.outputs.base_sha }}
           fetch-depth: 0
 
+      - name: Checkout workflow tools
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .ocr-tools
+          sparse-checkout: |
+            scripts/ci
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Prepare review range
         id: git-range
         shell: bash
@@ -111,7 +121,7 @@ jobs:
           OCR_HEAD_SHA: ${{ steps.pr-context.outputs.head_sha }}
           OCR_EXIT_CODE: ${{ steps.ocr.outputs.ocr_exit_code }}
         run: |
-          node scripts/ci/render-ocr-history-report.js \
+          node .ocr-tools/scripts/ci/render-ocr-history-report.js \
             --result ocr-result.json \
             --stderr ocr-stderr.log \
             --output ocr-report.md
