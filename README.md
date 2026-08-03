@@ -39,6 +39,7 @@ The repository includes parallel Jenkins and GitHub Actions quality-gate POCs, a
 - `Jenkinsfile` validates formatting, static analysis, tests with race detection and coverage, and compilation in Jenkins.
 - `.github/workflows/ci.yml` discovers affected Go, Node.js, and Java services from their manifests. It runs language-appropriate quality, test, coverage, and build checks only for affected services, but fans out to all services for shared CI/library/unknown-path changes. It also includes reachable-vulnerability, repository-security, and pull-request dependency-review checks, and exposes a stable `Quality Gate` check for branch protection.
 - `.github/workflows/codeql.yml` performs scheduled and pull-request CodeQL analysis for Go. CodeQL findings are enforced by a GitHub Ruleset, not by treating a completed scan as a clean scan.
+- `.github/workflows/open-code-review.yml` provides manual PR review through `/open-code-review` comments; see [Open Code Review GitHub Actions runbook](docs/OPEN-CODE-REVIEW-GITHUB-ACTIONS-RUNBOOK.md).
 - `.github/dependabot.yml` schedules Go module and GitHub Action version updates.
 - [GitHub native security-gate runbook](docs/GITHUB-NATIVE-SECURITY-GATE-RUNBOOK.md) describes the required GitHub settings, licensing boundary, and end-to-end evidence.
 - `.github/ISSUE_TEMPLATE/quality-gate-exception.yml` records a time-bound exception request; a failed check stays failed and only a restricted GitHub Ruleset bypass group can merge after independent approval.
