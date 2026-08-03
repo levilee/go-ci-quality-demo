@@ -10,8 +10,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
+  pull-requests: read
 
 concurrency:
   group: open-code-review-history-pr-${{ inputs.pr_number }}
@@ -55,16 +54,6 @@ jobs:
           ref: ${{ steps.pr-context.outputs.base_sha }}
           fetch-depth: 0
 
-      - name: Checkout workflow tools
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .ocr-tools
-          sparse-checkout: |
-            scripts/ci
-          fetch-depth: 1
-          persist-credentials: false
-
       - name: Prepare review range
         id: git-range
         shell: bash
@@ -100,36 +89,45 @@ jobs:
           ocr review \
             --from "$MERGE_BASE" \
             --to "$HEAD_SHA" \
-            --format json \
+            --format text \
             --audience agent \
             --background "Review historical PR #${PR_NUMBER}: ${PR_TITLE}" \
-            > ocr-result.json 2> ocr-stderr.log
+            > ocr-report.txt 2> ocr-stderr.log
           OCR_EXIT_CODE=$?
           set -e
           echo "ocr_exit_code=${OCR_EXIT_CODE}" >> "$GITHUB_OUTPUT"
           echo "OCR exit code: ${OCR_EXIT_CODE}"
           exit 0
 
-      - name: Render report
-        if: always()
-        shell: bash
-        env:
-          OCR_PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
-          OCR_PR_TITLE: ${{ steps.pr-context.outputs.pr_title }}
-          OCR_PR_URL: ${{ steps.pr-context.outputs.pr_url }}
-          OCR_MERGE_BASE: ${{ steps.git-range.outputs.merge_base }}
-          OCR_HEAD_SHA: ${{ steps.pr-context.outputs.head_sha }}
-          OCR_EXIT_CODE: ${{ steps.ocr.outputs.ocr_exit_code }}
-        run: |
-          node .ocr-tools/scripts/ci/render-ocr-history-report.js \
-            --result ocr-result.json \
-            --stderr ocr-stderr.log \
-            --output ocr-report.md
-
       - name: Add report to Actions Summary
         if: always()
         shell: bash
-        run: cat ocr-report.md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
+          PR_TITLE: ${{ steps.pr-context.outputs.pr_title }}
+          MERGE_BASE: ${{ steps.git-range.outputs.merge_base }}
+          HEAD_SHA: ${{ steps.pr-context.outputs.head_sha }}
+          OCR_EXIT_CODE: ${{ steps.ocr.outputs.ocr_exit_code }}
+        run: |
+          {
+            echo "## Open Code Review Report"
+            echo
+            echo "- PR: #${PR_NUMBER} - ${PR_TITLE}"
+            echo "- Review range: ${MERGE_BASE}..${HEAD_SHA}"
+            echo "- OCR exit code: ${OCR_EXIT_CODE:-unknown}"
+            echo
+            if [ -s ocr-report.txt ]; then
+              cat ocr-report.txt
+            elif [ -s ocr-stderr.log ]; then
+              echo "### OCR diagnostics"
+              echo
+              echo '```text'
+              cat ocr-stderr.log
+              echo '```'
+            else
+              echo "No OCR output was generated."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload OCR report
         if: always()
@@ -137,47 +135,6 @@ jobs:
         with:
           name: ocr-history-report-${{ github.run_id }}
           path: |
-            ocr-report.md
-            ocr-result.json
+            ocr-report.txt
             ocr-stderr.log
           if-no-files-found: warn
-
-      - name: Comment report on target PR
-        if: always() && steps.pr-context.outcome == 'success'
-        uses: actions/github-script@v7
-        env:
-          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const fs = require('fs');
-            const marker = '<!-- ocr-history-report -->';
-            const report = fs.existsSync('ocr-report.md')
-              ? fs.readFileSync('ocr-report.md', 'utf8').slice(0, 50000)
-              : 'Report file was not generated.';
-            const body = `${marker}\n${report}\n\nFull artifacts and logs: ${process.env.RUN_URL}`;
-            const issueNumber = Number(process.env.PR_NUMBER);
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            });
-            const existing = comments.reverse().find((comment) =>
-              comment.user?.type === 'Bot' && comment.body?.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body,
-              });
-            }
