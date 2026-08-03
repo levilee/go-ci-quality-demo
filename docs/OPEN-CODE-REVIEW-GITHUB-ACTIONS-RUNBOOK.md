@@ -39,22 +39,6 @@ Variables：
 
 只有仓库 Owner、Member 或 Collaborator 的非 Bot 评论可以触发审查。
 
-## 方式二：Actions 页面触发
-
-1. 打开仓库的 `Actions`。
-2. 选择 `Open Code Review`。
-3. 点击 `Run workflow`。
-4. 输入目标 PR 编号，例如 `123`。
-5. 点击运行。
-
-工作流会重新读取 PR 的最新 head SHA，不使用手工填写的 commit SHA。
-
-命令行方式等价于：
-
-```bash
-gh workflow run open-code-review.yml --ref main -f pr_number=123
-```
-
 ## 审查范围
 
 审查范围是：
@@ -78,6 +62,4 @@ merge-base(PR base, PR latest head) -> PR latest head
 - 没有触发：确认评论以 `/open-code-review` 开头，并且触发者是仓库协作者。
 - 缺少 Secret：检查 `OCR_LLM_URL` 和 `OCR_LLM_AUTH_TOKEN` 是否配置在当前仓库或可用 Environment。
 - 模型请求失败：下载 `open-code-review-*` Artifact，先查看 `ocr-stderr.log`。
-- PR 编号错误：使用当前仓库中仍为 Open 的 PR 编号，不要输入 URL 或 commit SHA。
 - 评论未出现：确认工作流具有 `pull-requests: write`，再检查 Action 日志和 Artifact。
-- Actions 页面没有 `Run workflow`：确认该工作流文件已推送到当前分支，并且仓库允许手动运行 Actions。

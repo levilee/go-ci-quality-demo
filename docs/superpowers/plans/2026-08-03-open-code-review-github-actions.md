@@ -1,5 +1,7 @@
 # Open Code Review GitHub Actions Integration Implementation Plan
 
+> Scope revision: after implementation review, the `workflow_dispatch` path and its custom publisher were removed. The active workflow now uses only the authorized `/open-code-review` PR comment path; the detailed second-path tasks below are retained as historical implementation notes.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add two manual GitHub Actions entry points that review the latest changes of a selected Pull Request with Open Code Review and publish comments without affecting merge protection.

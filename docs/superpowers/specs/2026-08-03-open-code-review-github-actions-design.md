@@ -1,5 +1,7 @@
 # Open Code Review GitHub Actions 集成设计
 
+> Scope revision: the `workflow_dispatch` path was removed after implementation review. The current implementation supports only the authorized `/open-code-review` PR comment trigger and the original page-trigger design below is retained as historical design context.
+
 ## 背景
 
 当前仓库已经有 GitHub Native Quality Gate、CodeQL 和 Dependabot，但没有把 Open Code Review 集成到 GitHub Pull Request 流程中。目标是在不改变现有质量门禁的前提下，为指定 PR 提供可重复的 LLM 代码审查结果。
