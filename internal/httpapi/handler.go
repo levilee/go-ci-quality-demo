@@ -66,9 +66,11 @@ func (a *API) calculate(w http.ResponseWriter, r *http.Request) {
 		result = left - right
 	case "multiply":
 		result = left * right
+	case "divide":
+		result = left / right
 	default:
 		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "operation must be one of: add, subtract, multiply",
+			"error": "operation must be one of: add, subtract, multiply, divide",
 		})
 		return
 	}

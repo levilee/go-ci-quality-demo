@@ -54,9 +54,10 @@ func TestCalculate(t *testing.T) {
 		{name: "add", url: "/api/calculate?a=7&b=5&operation=add", wantCode: http.StatusOK, wantValue: 12},
 		{name: "subtract", url: "/api/calculate?a=7&b=5&operation=subtract", wantCode: http.StatusOK, wantValue: 2},
 		{name: "multiply", url: "/api/calculate?a=-3&b=5&operation=multiply", wantCode: http.StatusOK, wantValue: -15},
+		{name: "divide", url: "/api/calculate?a=10&b=2&operation=divide", wantCode: http.StatusOK, wantValue: 5},
 		{name: "missing a", url: "/api/calculate?b=5&operation=add", wantCode: http.StatusBadRequest, wantError: "a is required"},
 		{name: "invalid b", url: "/api/calculate?a=7&b=text&operation=add", wantCode: http.StatusBadRequest, wantError: "b must be a valid integer"},
-		{name: "invalid operation", url: "/api/calculate?a=7&b=5&operation=divide", wantCode: http.StatusBadRequest, wantError: "operation must be one of: add, subtract, multiply"},
+		{name: "invalid operation", url: "/api/calculate?a=7&b=5&operation=modulo", wantCode: http.StatusBadRequest, wantError: "operation must be one of: add, subtract, multiply, divide"},
 	}
 
 	for _, test := range tests {
