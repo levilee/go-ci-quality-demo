@@ -41,6 +41,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Resolve PR context
+        id: pr-context
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number;
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            core.setOutput('base_ref', pullRequest.base.ref);
+            core.setOutput('head_sha', pullRequest.head.sha);
+
       - name: Run Open Code Review from PR comment
         uses: alibaba/open-code-review@1b193db3587e4d3f429bd8c8213479d63e3b4f21
         with:
@@ -51,6 +65,8 @@ jobs:
           llm_use_anthropic: ${{ vars.OCR_LLM_USE_ANTHROPIC }}
           language: Chinese
           ocr_version: 1.7.16
+          base_ref: ${{ steps.pr-context.outputs.base_ref }}
+          head_sha: ${{ steps.pr-context.outputs.head_sha }}
           review_concurrency: '4'
           sticky_summary: 'true'
           incremental: 'true'
