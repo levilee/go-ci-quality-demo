@@ -118,7 +118,7 @@ async function upsertSummary(github, owner, repo, pullNumber, body) {
     repo,
     issue_number: pullNumber,
   });
-  const existing = comments.find((comment) => text(comment.body).includes(SUMMARY_MARKER));
+  const existing = comments.find((comment) => comment.user?.type === 'Bot' && text(comment.body).includes(SUMMARY_MARKER));
 
   if (existing) {
     await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
@@ -160,7 +160,7 @@ async function postOpenCodeReview({ github, owner, repo, pullNumber, headSha, re
 
   for (const comment of existingComments) {
     const match = text(comment.body).match(/<!-- open-code-review-inline:[0-9a-f]{16} -->/);
-    if (match) existingMarkers.add(match[0]);
+    if (comment.user?.type === 'Bot' && match) existingMarkers.add(match[0]);
   }
 
   const freshInline = classified.inline.filter((item) => !existingMarkers.has(commentMarker(item)));
@@ -176,7 +176,7 @@ async function postOpenCodeReview({ github, owner, repo, pullNumber, headSha, re
         pull_number: pullNumber,
         commit_id: headSha,
         event: 'COMMENT',
-        body: '',
+        body: 'OpenCodeReview inline findings; see the summary comment for the complete review.',
         comments: freshInline.map(buildInlinePayload),
       });
       inlinePosted = freshInline.length;

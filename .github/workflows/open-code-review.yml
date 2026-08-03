@@ -167,7 +167,7 @@ jobs:
           retention-days: 7
 
       - name: Publish OCR results to Pull Request
-        if: always()
+        if: always() && steps.pr-context.outcome == 'success'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           PR_NUMBER: ${{ steps.pr-context.outputs.number }}
